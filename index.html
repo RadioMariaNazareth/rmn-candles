@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RMN-Candles</title>
+    <link rel="icon" type="image/png" href="rmnlogo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-auth-compat.js"></script>
+
+    <style>
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.3; transform: scale(1) translateX(-50%); }
+            50% { opacity: 0.6; transform: scale(1.15) translateX(-50%); }
+        }
+        .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+        body { margin: 0; overflow: hidden; background-color: #003e8b; touch-action: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .transition-viewport { transition: transform 0.1s ease-out; }
+        
+        /* Background Dots */
+        .bg-dots {
+            background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBYo-4UQu26-w4irzS8y3ven_eLutoZFUQ",
+            authDomain: "rmn-candles.firebaseapp.com",
+            projectId: "rmn-candles",
+            storageBucket: "rmn-candles.firebasestorage.app",
+            messagingSenderId: "424166278065",
+            appId: "1:424166278065:web:8714ea739a848d09797390",
+            measurementId: "G-0329BFB675"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = 'radio-maria-nazareth';
+
+        const Icon = ({ name, size = 20 }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} style={{width: size, height: size}}></i>;
+        };
+
+        const TeaLightCandle = ({ name, pos }) => (
+            <div className="absolute transition-all duration-700 ease-out flex flex-col items-center" 
+                 style={{ left: pos.x, top: pos.y, transform: 'translate(-50%, -50%)' }}>
+                <div className="relative flex flex-col items-center justify-center">
+                    {/* Flame */}
+                    <div className="absolute top-[-22px] left-1/2 -translate-x-1/2 w-12 h-12 bg-orange-400/40 rounded-full blur-xl animate-pulse-glow"></div>
+                    <div className="absolute top-[-18px] left-1/2 -translate-x-1/2 w-2 h-4 bg-gradient-to-t from-orange-600 via-yellow-300 to-white rounded-full animate-bounce z-10"></div>
+                    
+                    {/* Candle Body */}
+                    <div className="w-10 h-5 bg-gradient-to-b from-white via-gray-100 to-gray-300 rounded-sm shadow-lg flex items-center justify-center relative overflow-hidden">
+                         {/* Name centered on candle body */}
+                         <span className="text-[7px] text-blue-900/40 font-black uppercase truncate px-1">{name}</span>
+                    </div>
+                </div>
+                {/* Name Label permanently below candle */}
+                <span className="text-[9px] text-white/80 font-bold mt-1.5 text-center drop-shadow-md">{name}</span>
+            </div>
+        );
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [view, setView] = useState('home');
+            const [people, setPeople] = useState([]);
+            const [formData, setFormData] = useState({ name: '', amount: '' });
+            const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+            const [adminPass, setAdminPass] = useState('');
+            
+            const [scale, setScale] = useState(1);
+            const [position, setPosition] = useState({ x: 0, y: 0 });
+            const [isDragging, setIsDragging] = useState(false);
+            const dragStart = useRef({ x: 0, y: 0 });
+
+            useEffect(() => {
+                auth.onAuthStateChanged(async (u) => { if (!u) await auth.signInAnonymously(); else setUser(u); });
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                return db.collection('candles').doc(appId).collection('people')
+                    .orderBy('timestamp', 'asc')
+                    .onSnapshot(snap => setPeople(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+            }, [user]);
+
+            const peopleWithPositions = useMemo(() => {
+                const LOGO_RADIUS = 180; // Minimum distance from center
+                return people.map((p, i) => {
+                    const angle = i * 2.4; 
+                    const radius = LOGO_RADIUS + (Math.sqrt(i) * 60); 
+                    
+                    const x = 500 + radius * Math.cos(angle);
+                    const y = 500 + radius * Math.sin(angle);
+                    
+                    return { ...p, posX: `${x}px`, posY: `${y}px` };
+                });
+            }, [people]);
+
+            const handleAdd = async (e) => {
+                e.preventDefault();
+                try {
+                    await db.collection('candles').doc(appId).collection('people').add({
+                        name: formData.name,
+                        amount: parseFloat(formData.amount) || 0,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    setFormData({ name: '', amount: '' });
+                } catch (err) { alert(err.message); }
+            };
+
+            const handleWheel = (e) => {
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                setScale(prev => Math.min(Math.max(prev * delta, 0.2), 4));
+            };
+
+            return (
+                <div 
+                    className="fixed inset-0 bg-[#003e8b] text-white flex flex-col font-sans overflow-hidden select-none" 
+                    onWheel={handleWheel}
+                    onMouseMove={e => { if (isDragging) setPosition({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y }); }}
+                    onMouseUp={() => setIsDragging(false)}
+                    onMouseLeave={() => setIsDragging(false)}
+                >
+                    
+                    <div className="fixed top-6 right-6 z-50 flex flex-col gap-3">
+                        <button onClick={() => view === 'admin' ? setView('home') : setIsAdminModalOpen(true)} className="w-12 h-12 flex items-center justify-center bg-white text-[#003e8b] rounded-full shadow-2xl">
+                            <Icon name={view === 'admin' ? "x" : "plus"} />
+                        </button>
+                        {view === 'home' && (
+                            <button onClick={() => {setScale(1); setPosition({x:0, y:0})}} className="w-12 h-12 flex items-center justify-center bg-yellow-400 text-[#003e8b] rounded-full shadow-2xl">
+                                <Icon name="maximize" />
+                            </button>
+                        )}
+                    </div>
+
+                    {view === 'home' ? (
+                        <main 
+                            className={`flex-1 relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                            onMouseDown={e => { setIsDragging(true); dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y }; }}
+                        >
+                            <div className="absolute inset-0 transition-viewport" style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}>
+                                {/* Dots Background Layer */}
+                                <div className="absolute inset-[-5000px] bg-dots pointer-events-none"></div>
+
+                                <div className="relative w-[1000px] h-[1000px] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                                    {/* Logo Circle */}
+                                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 p-8 z-0">
+                                        <img src="rmnlogo.png" alt="RMN" className="w-full h-auto object-contain" />
+                                    </div>
+
+                                    {peopleWithPositions.map(p => (
+                                        <TeaLightCandle key={p.id} name={p.name} pos={{ x: p.posX, y: p.posY }} />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl px-10 py-5 text-center shadow-2xl">
+                                <div className="text-4xl font-black">{people.length.toLocaleString()}</div>
+                                <div className="text-sm uppercase tracking-widest opacity-70 mt-1">الشموع المضاءة</div>
+                                <div className="text-xl font-bold text-yellow-400 mt-2">
+                                    {people.reduce((s,p)=>s+(p.amount||0),0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                </div>
+                            </div>
+                        </main>
+                    ) : (
+                        <main className="flex-1 flex flex-col md:flex-row bg-gray-50 text-gray-900 overflow-hidden">
+                            <div className="w-full md:w-1/3 p-10 flex flex-col justify-center border-r bg-white shadow-xl z-10">
+                                <h2 className="text-3xl font-black text-[#003e8b] mb-8 uppercase tracking-tighter">Admin Control</h2>
+                                <form onSubmit={handleAdd} className="space-y-4">
+                                    <input required placeholder="Donor Name" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full p-4 bg-gray-100 rounded-xl font-bold outline-none" />
+                                    <input required type="number" step="0.01" placeholder="Amount" value={formData.amount} onChange={e=>setFormData({...formData, amount: e.target.value})} className="w-full p-4 bg-gray-100 rounded-xl font-bold outline-none" />
+                                    <button type="submit" className="w-full py-4 bg-[#003e8b] text-white rounded-xl font-bold shadow-lg">ADD DONATION</button>
+                                </form>
+                            </div>
+                            <div className="flex-1 p-10 flex flex-col overflow-hidden">
+                                <h3 className="text-xl font-black text-gray-300 mb-6 uppercase">Donation History</h3>
+                                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-4">
+                                    {people.slice().reverse().map(p => (
+                                        <div key={p.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+                                            <div className="font-black text-lg text-[#003e8b] uppercase">{p.name}</div>
+                                            <div className="text-xl font-black text-green-600">+{p.amount.toLocaleString()}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </main>
+                    )}
+
+                    {isAdminModalOpen && (
+                        <div className="fixed inset-0 z-[100] bg-[#003e8b]/95 flex items-center justify-center p-4">
+                            <div className="bg-white p-8 rounded-3xl w-full max-w-sm text-gray-900 shadow-2xl">
+                                <h3 className="font-bold mb-4 uppercase text-center text-gray-400">Unlock Admin</h3>
+                                <input type="password" value={adminPass} onChange={e=>setAdminPass(e.target.value)} className="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-2xl font-bold outline-none" autoFocus placeholder="••••" />
+                                <div className="flex gap-2">
+                                    <button onClick={()=>setIsAdminModalOpen(false)} className="flex-1 py-3 border font-bold rounded-xl">BACK</button>
+                                    <button onClick={()=>{ if(adminPass === 'admin123'){setView('admin'); setIsAdminModalOpen(false); setAdminPass('');}else{alert('Wrong');} }} className="flex-1 py-3 bg-[#003e8b] text-white font-bold rounded-xl">ENTER</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
