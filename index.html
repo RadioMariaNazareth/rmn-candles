@@ -24,7 +24,7 @@
 }
 .animate-pulse-glow{animation:pulse-glow 3s ease-in-out infinite}
 body{margin:0;overflow:hidden;background:#003e8b;touch-action:none; font-family: sans-serif;}
-.transition-viewport{transition:transform .1s ease-out}
+.transition-viewport{transition:transform .3s ease-out}
 .bg-dots{
 background-image:radial-gradient(rgba(255,255,255,.15) 1px,transparent 1px);
 background-size:40px 40px;
@@ -76,7 +76,7 @@ style={{left:pos.x,top:pos.y,transform:'translate(-50%,-50%)'}}>
 {name.substring(0,6)}
 </div>
 </div>
-<span className="text-[10px] mt-1 text-white font-medium drop-shadow-md">{name}</span>
+<span className="text-[10px] mt-1 text-white font-medium drop-shadow-md whitespace-nowrap">{name}</span>
 </div>
 );
 
@@ -96,6 +96,15 @@ const dragStart=useRef({x:0,y:0});
 const holdTimer=useRef(null);
 const initialPinchDist = useRef(null);
 
+const centerCanvas = () => {
+    // Canvas is 1000x1000. Center point is 500x500.
+    // To center that point in the viewport:
+    const offsetX = (window.innerWidth / 2) - 500;
+    const offsetY = (window.innerHeight / 2) - 500;
+    setPosition({x: offsetX, y: offsetY});
+    setScale(1);
+};
+
 const getPos=e=>{
 if(e.touches)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
 return{x:e.clientX,y:e.clientY};
@@ -113,6 +122,8 @@ auth.onAuthStateChanged(async u=>{
 if(!u)await auth.signInAnonymously();
 else setUser(u);
 });
+// Center the logo on initial load
+centerCanvas();
 },[]);
 
 useEffect(()=>{
@@ -124,8 +135,8 @@ return db.collection('candles').doc(appId).collection('people')
 
 const peopleWithPositions=useMemo(()=>{
 return people.map((p,i)=>{
-const r=180+Math.sqrt(i)*60;
-const a=i*2.4;
+const r=180 + Math.sqrt(i) * 65;
+const a=i * 2.4;
 return{...p,posX:`${500+r*Math.cos(a)}px`,posY:`${500+r*Math.sin(a)}px`};
 });
 },[people]);
@@ -151,7 +162,6 @@ const handleLogin = () => {
     }
 };
 
-// Handle Zoom on Scroll
 useEffect(() => {
     const handleWheel = (e) => {
         if (view !== 'home') return;
@@ -169,7 +179,6 @@ onMouseMove={e=>{ if(!isDragging)return; const p=getPos(e); setPosition({x:p.x-d
 onMouseUp={()=>setIsDragging(false)}
 onTouchMove={e=>{ 
     if (e.touches.length === 2) {
-        // Pinch Zoom
         const dist = getDistance(e.touches);
         if (initialPinchDist.current) {
             const diff = dist / initialPinchDist.current;
@@ -185,14 +194,14 @@ onTouchEnd={()=>{setIsDragging(false); initialPinchDist.current = null;}}
 >
 
 {/* Header Controls */}
-<div className="fixed top-6 right-6 flex flex-col gap-3 z-50">
-<button onClick={()=>{setScale(1);setPosition({x:0,y:0})}}
+<div className="fixed top-4 right-4 md:top-6 md:right-6 flex flex-col gap-3 z-50 items-end">
+<button onClick={centerCanvas}
 className="w-12 h-12 bg-yellow-400 text-blue-900 rounded-full flex items-center justify-center shadow-lg hover:bg-yellow-300 transition-colors">
 <Icon name="maximize"/>
 </button>
 
 <a href="https://www.radiomariam.org.il/donate" target="_blank"
-className="px-6 py-3 bg-yellow-400 text-blue-900 rounded-full font-bold text-center shadow-lg hover:bg-yellow-300 transition-all active:scale-95"
+className="px-5 py-3 md:px-6 md:py-3 bg-yellow-400 text-blue-900 rounded-full font-bold text-center shadow-lg hover:bg-yellow-300 transition-all active:scale-95 text-sm md:text-base"
 onMouseDown={startHold} onMouseUp={cancelHold} onTouchStart={startHold} onTouchEnd={cancelHold}>
 قم بإضاءة شمعة
 </a>
@@ -218,7 +227,7 @@ onTouchStart={e=>{
 <div className="absolute inset-0 transition-viewport"
 style={{transform:`translate(${position.x}px,${position.y}px) scale(${scale})`}}>
 <div className="absolute inset-[-5000px] bg-dots"></div>
-<div className="relative w-[1000px] h-[1000px] m-auto">
+<div className="relative w-[1000px] h-[1000px]">
 <div className="absolute w-64 h-64 bg-white/10 rounded-full flex items-center justify-center left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 backdrop-blur-sm border border-white/20">
 <img src="rmnlogo.png" className="w-48 h-48 object-contain pointer-events-none"/>
 </div>
